@@ -1,0 +1,517 @@
+Index: app/src/main/java/com/example/cs492finalproject/AppDatabase.kt
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>package com.example.cs492finalproject\r\n\r\nimport androidx.room.Database\r\nimport androidx.room.RoomDatabase\r\n\r\n@Database(entities = [SearchHistory::class], version = 1, exportSchema = false)\r\nabstract class AppDatabase : RoomDatabase() {\r\n    abstract fun searchHistoryDao(): SearchHistoryDao\r\n}
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/app/src/main/java/com/example/cs492finalproject/AppDatabase.kt b/app/src/main/java/com/example/cs492finalproject/AppDatabase.kt
+--- a/app/src/main/java/com/example/cs492finalproject/AppDatabase.kt	(revision 0109b6449fc8dbc0352cac52869915e58d359b8f)
++++ b/app/src/main/java/com/example/cs492finalproject/AppDatabase.kt	(date 1710990023220)
+@@ -1,9 +1,30 @@
+ package com.example.cs492finalproject
+ 
++import android.content.Context
+ import androidx.room.Database
++import androidx.room.Room
+ import androidx.room.RoomDatabase
+ 
+-@Database(entities = [SearchHistory::class], version = 1, exportSchema = false)
++@Database(entities = [DrugInfo::class, SearchHistory::class], version = 1)
+ abstract class AppDatabase : RoomDatabase() {
++    abstract fun drugInfoDao() : DrugInfoDao
+     abstract fun searchHistoryDao(): SearchHistoryDao
++    companion object {
++        @Volatile private var instance: AppDatabase? = null
++
++        private fun buildDatabase(context: Context) =
++            Room.databaseBuilder(
++                context,
++                AppDatabase::class.java,
++                "drug-info-db"
++            ).build()
++
++        fun getInstance(context: Context) : AppDatabase {
++            return instance ?: synchronized(this) {
++                instance ?: buildDatabase(context).also {
++                    instance = it
++                }
++            }
++        }
++    }
+ }
+\ No newline at end of file
+Index: app/src/main/java/com/example/cs492finalproject/ui/DrugInfoFragment.kt
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>package com.example.cs492finalproject.ui\r\n\r\nimport android.content.ActivityNotFoundException\r\nimport android.content.Intent\r\nimport android.net.Uri\r\nimport android.os.Bundle\r\nimport android.util.Log\r\nimport android.view.View\r\nimport android.widget.Button\r\nimport android.widget.TextView\r\nimport androidx.fragment.app.Fragment\r\nimport androidx.navigation.fragment.navArgs\r\nimport com.example.cs492finalproject.R\r\n\r\nclass DrugInfoFragment : Fragment(R.layout.fragment_drug_info) {\r\n    private val args: DrugInfoFragmentArgs by navArgs()\r\n    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {\r\n        super.onViewCreated(view, savedInstanceState)\r\n        val nameTV: TextView = view.findViewById(R.id.tv_drug_name)\r\n        val publishedDateTV: TextView = view.findViewById(R.id.tv_drug_description)\r\n\r\n        nameTV.text = args.drug.title\r\n        publishedDateTV.text = \"Published Date: ${args.drug.publishedDate}\"\r\n        val openBrowserBtn: Button = view.findViewById(R.id.open_browser_button)\r\n\r\n\r\n        openBrowserBtn.setOnClickListener {\r\n            Log.d(\"OpenBrowser\", \"Open browser button clicked, url: \" + viewDrugInBrowser())\r\n        }\r\n    }\r\n\r\n    private fun viewDrugInBrowser(): String {\r\n        val setid = Uri.parse(args.drug.setId)\r\n        val baseUrl = \"https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=\"\r\n        val url = baseUrl + setid\r\n        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))\r\n        try {\r\n            startActivity(intent)\r\n        } catch (e: ActivityNotFoundException) {\r\n\r\n        }\r\n        return url\r\n    }\r\n}
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/app/src/main/java/com/example/cs492finalproject/ui/DrugInfoFragment.kt b/app/src/main/java/com/example/cs492finalproject/ui/DrugInfoFragment.kt
+--- a/app/src/main/java/com/example/cs492finalproject/ui/DrugInfoFragment.kt	(revision 0109b6449fc8dbc0352cac52869915e58d359b8f)
++++ b/app/src/main/java/com/example/cs492finalproject/ui/DrugInfoFragment.kt	(date 1710989735696)
+@@ -5,28 +5,56 @@
+ import android.net.Uri
+ import android.os.Bundle
+ import android.util.Log
++import android.view.Menu
++import android.view.MenuInflater
++import android.view.MenuItem
+ import android.view.View
+ import android.widget.Button
++import android.widget.ImageButton
+ import android.widget.TextView
++import androidx.appcompat.content.res.AppCompatResources
++import androidx.core.view.MenuHost
++import androidx.core.view.MenuProvider
+ import androidx.fragment.app.Fragment
++import androidx.fragment.app.viewModels
+ import androidx.navigation.fragment.navArgs
++import androidx.recyclerview.widget.RecyclerView
+ import com.example.cs492finalproject.R
++import com.example.cs492finalproject.ui.dashboard.BookmarkedReposViewModel
+ 
+ class DrugInfoFragment : Fragment(R.layout.fragment_drug_info) {
+     private val args: DrugInfoFragmentArgs by navArgs()
++    private val viewModel: BookmarkedReposViewModel by viewModels()
++    private var isBookmarked = false
++
++
++    private lateinit var bookmarkMenuItem: MenuItem
+     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+         super.onViewCreated(view, savedInstanceState)
+-        val nameTV: TextView = view.findViewById(R.id.tv_drug_name)
+-        val publishedDateTV: TextView = view.findViewById(R.id.tv_drug_description)
+-
+-        nameTV.text = args.drug.title
+-        publishedDateTV.text = "Published Date: ${args.drug.publishedDate}"
++        val drugIdTV: TextView = view.findViewById(R.id.tv_drug_name)
+         val openBrowserBtn: Button = view.findViewById(R.id.open_browser_button)
++        val bookmarkButton: ImageButton = view.findViewById(R.id.bookmark_button)
+ 
++        drugIdTV.text = args.drug.setId
+ 
+         openBrowserBtn.setOnClickListener {
+             Log.d("OpenBrowser", "Open browser button clicked, url: " + viewDrugInBrowser())
+         }
++
++        // Set initial bookmark icon based on the bookmark status
++        updateBookmarkIcon(bookmarkButton)
++
++        bookmarkButton.setOnClickListener {
++            isBookmarked = !isBookmarked
++            updateBookmarkIcon(bookmarkButton)
++
++            // Add or remove drug from the database based on the bookmark status
++            if (isBookmarked) {
++                viewModel.addBookmarkedRepo(args.drug)
++            } else {
++                viewModel.removeBookmarkedRepo(args.drug)
++            }
++        }
+     }
+ 
+     private fun viewDrugInBrowser(): String {
+@@ -41,4 +69,16 @@
+         }
+         return url
+     }
++
++    private fun updateBookmarkIcon(bookmarkButton: ImageButton) {
++        val bookmarkIcon = if (isBookmarked) {
++            R.drawable.ic_action_bookmark_on
++        } else {
++            R.drawable.ic_action_bookmark_off
++        }
++        bookmarkButton.setImageResource(bookmarkIcon)
++    }
++
++
++
+ }
+\ No newline at end of file
+Index: app/src/main/java/com/example/cs492finalproject/ui/search/SearchViewModel.kt
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>package com.example.cs492finalproject.ui.search\r\n\r\nimport android.app.Application\r\nimport android.util.Log\r\nimport androidx.lifecycle.AndroidViewModel\r\nimport androidx.lifecycle.LiveData\r\nimport androidx.lifecycle.MutableLiveData\r\nimport androidx.lifecycle.ViewModel\r\nimport androidx.lifecycle.viewModelScope\r\nimport com.example.cs492finalproject.DailyMedService\r\nimport com.example.cs492finalproject.DrugInfo\r\nimport com.example.cs492finalproject.DrugSearchResultsRepository\r\nimport com.example.cs492finalproject.LoadingStatus\r\nimport com.example.cs492finalproject.AppDatabase\r\nimport kotlinx.coroutines.launch\r\nimport androidx.room.Room\r\nimport com.example.cs492finalproject.SearchHistory\r\n\r\nclass SearchViewModel(application: Application) : AndroidViewModel(application) {\r\n    private val repository = DrugSearchResultsRepository(DailyMedService.create())\r\n    private val db = Room.databaseBuilder(application, AppDatabase::class.java, \"app_database\").build()\r\n    private val searchHistoryDao = db.searchHistoryDao()\r\n\r\n    private val _text = MutableLiveData<String>().apply {\r\n        value = \"This is search Fragment\"\r\n    }\r\n    val text: LiveData<String> = _text\r\n\r\n    private val _drugSearchResults = MutableLiveData<List<DrugInfo>?>(null)\r\n    val drugSearchResults: LiveData<List<DrugInfo>?> = _drugSearchResults\r\n\r\n    private val _loadingStatus = MutableLiveData<LoadingStatus>(LoadingStatus.SUCCESS)\r\n    val loadingStatus: LiveData<LoadingStatus> = _loadingStatus\r\n\r\n    private val _error = MutableLiveData<String?>(null)\r\n    val error: LiveData<String?> = _error\r\n\r\n    private val _searchHistory = MutableLiveData<List<String>>()\r\n    val searchHistory: LiveData<List<String>> = _searchHistory\r\n\r\n    init {\r\n        loadSearchHistory()\r\n    }\r\n\r\n    fun loadDrugSearchResults(query: String) {\r\n        viewModelScope.launch {\r\n            _loadingStatus.value = LoadingStatus.LOADING\r\n            val result = repository.loadDrugSearch(query)\r\n            _drugSearchResults.value = result.getOrNull()\r\n            _error.value = result.exceptionOrNull()?.message\r\n            _loadingStatus.value = when (result.isSuccess) {\r\n                true -> LoadingStatus.SUCCESS\r\n                false -> LoadingStatus.ERROR\r\n            }\r\n            Log.d(\"SearchQuery\", \"Result: \" + result.toString())\r\n\r\n            updateSearchHistory(query)\r\n        }\r\n    }\r\n\r\n    private fun loadSearchHistory() {\r\n        viewModelScope.launch {\r\n            val history = searchHistoryDao.getRecentSearches().map { it.query }\r\n            _searchHistory.postValue(history)\r\n        }\r\n    }\r\n\r\n    private fun updateSearchHistory(query: String) {\r\n        viewModelScope.launch {\r\n            searchHistoryDao.insert(SearchHistory(query = query))\r\n            searchHistoryDao.trimHistory()\r\n            loadSearchHistory()\r\n        }\r\n    }\r\n}
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/app/src/main/java/com/example/cs492finalproject/ui/search/SearchViewModel.kt b/app/src/main/java/com/example/cs492finalproject/ui/search/SearchViewModel.kt
+--- a/app/src/main/java/com/example/cs492finalproject/ui/search/SearchViewModel.kt	(revision 0109b6449fc8dbc0352cac52869915e58d359b8f)
++++ b/app/src/main/java/com/example/cs492finalproject/ui/search/SearchViewModel.kt	(date 1710989883144)
+@@ -18,7 +18,7 @@
+ 
+ class SearchViewModel(application: Application) : AndroidViewModel(application) {
+     private val repository = DrugSearchResultsRepository(DailyMedService.create())
+-    private val db = Room.databaseBuilder(application, AppDatabase::class.java, "app_database").build()
++    private val db = AppDatabase.getInstance(application)
+     private val searchHistoryDao = db.searchHistoryDao()
+ 
+     private val _text = MutableLiveData<String>().apply {
+Index: app/src/main/res/layout/fragment_dashboard.xml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+><?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n<androidx.constraintlayout.widget.ConstraintLayout xmlns:android=\"http://schemas.android.com/apk/res/android\"\r\n    xmlns:app=\"http://schemas.android.com/apk/res-auto\"\r\n    xmlns:tools=\"http://schemas.android.com/tools\"\r\n    android:layout_width=\"match_parent\"\r\n    android:layout_height=\"match_parent\"\r\n    tools:context=\".ui.dashboard.DashboardFragment\">\r\n\r\n    <TextView\r\n        android:id=\"@+id/text_dashboard\"\r\n        android:layout_width=\"match_parent\"\r\n        android:layout_height=\"wrap_content\"\r\n        android:layout_marginStart=\"8dp\"\r\n        android:layout_marginTop=\"8dp\"\r\n        android:layout_marginEnd=\"8dp\"\r\n        android:textAlignment=\"center\"\r\n        android:textSize=\"20sp\"\r\n        app:layout_constraintBottom_toBottomOf=\"parent\"\r\n        app:layout_constraintEnd_toEndOf=\"parent\"\r\n        app:layout_constraintStart_toStartOf=\"parent\"\r\n        app:layout_constraintTop_toTopOf=\"parent\" />\r\n</androidx.constraintlayout.widget.ConstraintLayout>
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/app/src/main/res/layout/fragment_dashboard.xml b/app/src/main/res/layout/fragment_dashboard.xml
+--- a/app/src/main/res/layout/fragment_dashboard.xml	(revision 0109b6449fc8dbc0352cac52869915e58d359b8f)
++++ b/app/src/main/res/layout/fragment_dashboard.xml	(date 1710989131069)
+@@ -1,22 +1,10 @@
+ <?xml version="1.0" encoding="utf-8"?>
+-<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
++<androidx.recyclerview.widget.RecyclerView
++    xmlns:android="http://schemas.android.com/apk/res/android"
+     xmlns:app="http://schemas.android.com/apk/res-auto"
+     xmlns:tools="http://schemas.android.com/tools"
++
++    android:id="@+id/rv_bookmarked_repos"
+     android:layout_width="match_parent"
+     android:layout_height="match_parent"
+-    tools:context=".ui.dashboard.DashboardFragment">
+-
+-    <TextView
+-        android:id="@+id/text_dashboard"
+-        android:layout_width="match_parent"
+-        android:layout_height="wrap_content"
+-        android:layout_marginStart="8dp"
+-        android:layout_marginTop="8dp"
+-        android:layout_marginEnd="8dp"
+-        android:textAlignment="center"
+-        android:textSize="20sp"
+-        app:layout_constraintBottom_toBottomOf="parent"
+-        app:layout_constraintEnd_toEndOf="parent"
+-        app:layout_constraintStart_toStartOf="parent"
+-        app:layout_constraintTop_toTopOf="parent" />
+-</androidx.constraintlayout.widget.ConstraintLayout>
+\ No newline at end of file
++    tools:context=".ui.dashboard.DashboardFragment" />
+Index: app/src/main/java/com/example/cs492finalproject/DailyMedService.kt
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>package com.example.cs492finalproject\r\n\r\nimport android.util.Log\r\nimport retrofit2.Response\r\nimport retrofit2.Retrofit\r\nimport retrofit2.converter.moshi.MoshiConverterFactory\r\nimport retrofit2.http.GET\r\nimport retrofit2.http.Query\r\nimport com.squareup.moshi.Json\r\nimport com.squareup.moshi.JsonClass\r\nimport retrofit2.http.Path\r\nimport java.io.Serializable\r\n\r\n// Define data classes to represent the API response structure\r\n@JsonClass(generateAdapter = true)\r\ndata class DailyMedResults(\r\n    @Json(name = \"data\") val data: List<DrugInfo>\r\n) : Serializable\r\n\r\n@JsonClass(generateAdapter = true)\r\ndata class DrugInfo(\r\n    @Json(name = \"spl_version\") val splVersion: Int,\r\n    @Json(name = \"published_date\") val publishedDate: String,\r\n    @Json(name = \"title\") val title: String,\r\n    @Json(name = \"setid\") val setId: String\r\n) : Serializable\r\n\r\n@JsonClass(generateAdapter = true)\r\ndata class Packaging(\r\n    @Json(name = \"data\") val data: List<PackagingData>\r\n) : Serializable\r\n\r\n@JsonClass(generateAdapter = true)\r\ndata class PackagingData(\r\n    @Json(name = \"products\") val products: List<PackagingDataProducts>,\r\n    @Json(name = \"setid\") val setid: String,\r\n    @Json(name = \"title\") val title: String\r\n) : Serializable\r\n\r\n@JsonClass(generateAdapter = true)\r\ndata class PackagingDataProducts(\r\n    @Json(name = \"product_name_generic\") val productNameGeneric: String,\r\n    @Json(name = \"product_name\") val productName: String,\r\n    @Json(name = \"product_code\") val productCode: String,\r\n    @Json(name = \"packaging\") val packaging: List<PackagingDataProductsPackaging>,\r\n    @Json(name = \"active_ingredients\") val activeIngredients: List<PackagingDataProductsActiveIngredients>,\r\n) : Serializable\r\n\r\n@JsonClass(generateAdapter = true)\r\ndata class PackagingDataProductsPackaging(\r\n    @Json(name = \"ndc\") val ndc: String,\r\n    @Json(name = \"package_descriptions\") val packageDescriptions: List<String>,\r\n) : Serializable\r\n\r\n@JsonClass(generateAdapter = true)\r\ndata class PackagingDataProductsActiveIngredients(\r\n    @Json(name = \"strength\") val strength: String,\r\n    @Json(name = \"name\") val name: String,\r\n) : Serializable\r\n\r\n//data class Metadata(\r\n//    @Json(name = \"db_published_date\") val dbPublishedDate: String,\r\n//    @Json(name = \"elements_per_page\") val elementsPerPage: Int,\r\n//    @Json(name = \"current_url\") val currentUrl: String,\r\n//    @Json(name = \"next_page_url\") val nextPageUrl: String?,\r\n//    @Json(name = \"total_elements\") val totalElements: Int,\r\n//    @Json(name = \"total_pages\") val totalPages: Int,\r\n//    @Json(name = \"current_page\") val currentPage: Int,\r\n//    @Json(name = \"previous_page\") val previousPage: Any?,\r\n//    @Json(name = \"previous_page_url\") val previousPageUrl: Any?,\r\n//    @Json(name = \"next_page\") val nextPage: Int\r\n//)\r\n\r\n// Define Retrofit service interface\r\ninterface DailyMedService {\r\n\r\n    @GET(\"spls.json\")\r\n    suspend fun getDrugData(\r\n        @Query(\"pagesize\") pageSize: Int = 10,\r\n        @Query(\"page\") page: Int = 1,\r\n        @Query(\"drug_name\") drugName: String\r\n    ): Response<DailyMedResults>\r\n\r\n    @GET(\"spls/{SETID}/packaging.json\")\r\n    suspend fun getPackagingData(\r\n        @Path(\"SETID\") setid: String,\r\n        @Query(\"pagesize\") pageSize: Int = 100,\r\n        @Query(\"page\") page: Int = 1\r\n    ): Response<Packaging>\r\n\r\n    companion object {\r\n        private const val BASE_URL = \"https://dailymed.nlm.nih.gov/dailymed/services/v2/\"\r\n        fun create(): DailyMedService {\r\n//            val requestUrl = buildRequestUrl(\"spls.json\", drugName = \"tylenol\")\r\n//            Log.d(\"SearchQuery\", \"Request URL: $requestUrl\")\r\n\r\n            return Retrofit.Builder()\r\n                .baseUrl(BASE_URL)\r\n                .addConverterFactory(MoshiConverterFactory.create())\r\n                .build()\r\n                .create(DailyMedService::class.java)\r\n        }\r\n//        private fun buildRequestUrl(endpoint: String, pageSize: Int = 10, page: Int = 1, drugName: String): String {\r\n//            return BASE_URL.toHttpUrlOrNull()!!.newBuilder()\r\n//                .addPathSegment(endpoint)\r\n//                .addQueryParameter(\"pagesize\", pageSize.toString())\r\n//                .addQueryParameter(\"page\", page.toString())\r\n//                .addQueryParameter(\"drug_name\", drugName)\r\n//                .build()\r\n//                .toString()\r\n//        }\r\n    }\r\n}\r\n// https://dailymed.nlm.nih.gov/dailymed/services/v2/spls.json\r\n//\r\n//// Create a Retrofit instance\r\n//val retrofit = Retrofit.Builder()\r\n//    .baseUrl(\"https://dailymed.nlm.nih.gov/dailymed/services/v2/\")\r\n//    .addConverterFactory(MoshiConverterFactory.create())\r\n//    .build()\r\n//\r\n//// Create an instance of the service interface\r\n//val service = retrofit.create(DailyMedService::class.java)
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/app/src/main/java/com/example/cs492finalproject/DailyMedService.kt b/app/src/main/java/com/example/cs492finalproject/DailyMedService.kt
+--- a/app/src/main/java/com/example/cs492finalproject/DailyMedService.kt	(revision 0109b6449fc8dbc0352cac52869915e58d359b8f)
++++ b/app/src/main/java/com/example/cs492finalproject/DailyMedService.kt	(date 1710989131054)
+@@ -1,6 +1,8 @@
+ package com.example.cs492finalproject
+ 
+ import android.util.Log
++import androidx.room.Entity
++import androidx.room.PrimaryKey
+ import retrofit2.Response
+ import retrofit2.Retrofit
+ import retrofit2.converter.moshi.MoshiConverterFactory
+@@ -17,11 +19,13 @@
+     @Json(name = "data") val data: List<DrugInfo>
+ ) : Serializable
+ 
++@Entity
+ @JsonClass(generateAdapter = true)
+ data class DrugInfo(
++    @PrimaryKey
++    @Json(name = "title") val title: String,
+     @Json(name = "spl_version") val splVersion: Int,
+     @Json(name = "published_date") val publishedDate: String,
+-    @Json(name = "title") val title: String,
+     @Json(name = "setid") val setId: String
+ ) : Serializable
+ 
+Index: app/src/main/res/layout/fragment_drug_info.xml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+><?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n<LinearLayout\r\n    xmlns:android=\"http://schemas.android.com/apk/res/android\"\r\n    xmlns:app=\"http://schemas.android.com/apk/res-auto\"\r\n    android:layout_width=\"match_parent\"\r\n    android:layout_height=\"match_parent\"\r\n    android:orientation=\"vertical\"\r\n    android:padding=\"8dp\">\r\n    <TextView\r\n        android:id=\"@+id/tv_drug_name\"\r\n        android:layout_width=\"wrap_content\"\r\n        android:layout_height=\"wrap_content\"\r\n        android:textAppearance=\"?attr/textAppearanceHeadline4\"\r\n        android:layout_marginBottom=\"2dp\" />\r\n    <TextView\r\n        android:id=\"@+id/tv_drug_description\"\r\n        android:layout_width=\"wrap_content\"\r\n        android:layout_height=\"wrap_content\"\r\n        android:layout_marginTop=\"8dp\"\r\n        android:textAppearance=\"?attr/textAppearanceBody1\"\r\n        android:text=\"Description\"/>\r\n    <Button\r\n        android:id=\"@+id/open_browser_button\"\r\n        android:layout_width=\"match_parent\"\r\n        android:layout_height=\"wrap_content\"\r\n        android:layout_marginTop=\"4dp\"\r\n        android:layout_marginHorizontal=\"8dp\"\r\n        style=\"?attr/materialButtonStyle\"\r\n        android:text=\"@string/more_information\" />\r\n</LinearLayout>
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/app/src/main/res/layout/fragment_drug_info.xml b/app/src/main/res/layout/fragment_drug_info.xml
+--- a/app/src/main/res/layout/fragment_drug_info.xml	(revision 0109b6449fc8dbc0352cac52869915e58d359b8f)
++++ b/app/src/main/res/layout/fragment_drug_info.xml	(date 1710989131070)
+@@ -27,4 +27,14 @@
+         android:layout_marginHorizontal="8dp"
+         style="?attr/materialButtonStyle"
+         android:text="@string/more_information" />
++
++    <ImageButton
++        android:id="@+id/bookmark_button"
++        android:layout_width="wrap_content"
++        android:layout_height="wrap_content"
++        android:layout_marginEnd="16dp"
++        android:layout_marginTop="16dp"
++        android:background="?android:attr/selectableItemBackground"
++        android:src="@drawable/ic_action_bookmark_off" />
++
+ </LinearLayout>
+\ No newline at end of file
+Index: app/src/main/res/values/strings.xml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+><resources>\r\n    <string name=\"app_name\">CS 492 Final Project</string>\r\n    <string name=\"title_search\">Search</string>\r\n    <string name=\"title_dashboard\">Dashboard</string>\r\n    <string name=\"title_notifications\">Notifications</string>\r\n    <string name=\"search_hint\">Search drug...</string>\r\n    <string name=\"search\">Search</string>\r\n    <string name=\"label_drug_info\">Drug Information</string>\r\n    <string name=\"more_information\">More Information</string>\r\n</resources>
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/app/src/main/res/values/strings.xml b/app/src/main/res/values/strings.xml
+--- a/app/src/main/res/values/strings.xml	(revision 0109b6449fc8dbc0352cac52869915e58d359b8f)
++++ b/app/src/main/res/values/strings.xml	(date 1710989131075)
+@@ -7,4 +7,5 @@
+     <string name="search">Search</string>
+     <string name="label_drug_info">Drug Information</string>
+     <string name="more_information">More Information</string>
++    <string name="action_bookmark">Bookmark</string>
+ </resources>
+\ No newline at end of file
+Index: app/src/main/res/drawable-anydpi/ic_action_bookmark_off.xml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/app/src/main/res/drawable-anydpi/ic_action_bookmark_off.xml b/app/src/main/res/drawable-anydpi/ic_action_bookmark_off.xml
+new file mode 100644
+--- /dev/null	(date 1710989131062)
++++ b/app/src/main/res/drawable-anydpi/ic_action_bookmark_off.xml	(date 1710989131062)
+@@ -0,0 +1,11 @@
++<vector xmlns:android="http://schemas.android.com/apk/res/android"
++    android:width="24dp"
++    android:height="24dp"
++    android:viewportWidth="24"
++    android:viewportHeight="24"
++    android:tint="#333333"
++    android:alpha="0.6">
++  <path
++      android:fillColor="@android:color/white"
++      android:pathData="M17,3L7,3c-1.1,0 -1.99,0.9 -1.99,2L5,21l7,-3 7,3L19,5c0,-1.1 -0.9,-2 -2,-2zM17,18l-5,-2.18L7,18L7,5h10v13z"/>
++</vector>
+Index: app/src/main/res/values/ids.xml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/app/src/main/res/values/ids.xml b/app/src/main/res/values/ids.xml
+new file mode 100644
+--- /dev/null	(date 1710989131073)
++++ b/app/src/main/res/values/ids.xml	(date 1710989131073)
+@@ -0,0 +1,5 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources>
++    <item name="action_bookmark" type="id" />
++    <item name="rv_bookmarked_repos" type="id" />
++</resources>
+\ No newline at end of file
+Index: app/src/main/java/com/example/cs492finalproject/ui/dashboard/DashboardFragment.kt
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>package com.example.cs492finalproject.ui.dashboard\r\n\r\nimport android.os.Bundle\r\nimport android.view.LayoutInflater\r\nimport android.view.View\r\nimport android.view.ViewGroup\r\nimport android.widget.TextView\r\nimport androidx.fragment.app.Fragment\r\nimport androidx.lifecycle.ViewModelProvider\r\nimport com.example.cs492finalproject.databinding.FragmentDashboardBinding\r\n\r\nclass DashboardFragment : Fragment() {\r\n\r\n    private var _binding: FragmentDashboardBinding? = null\r\n\r\n    // This property is only valid between onCreateView and\r\n    // onDestroyView.\r\n    private val binding get() = _binding!!\r\n\r\n    override fun onCreateView(\r\n        inflater: LayoutInflater,\r\n        container: ViewGroup?,\r\n        savedInstanceState: Bundle?\r\n    ): View {\r\n        val dashboardViewModel =\r\n            ViewModelProvider(this).get(DashboardViewModel::class.java)\r\n\r\n        _binding = FragmentDashboardBinding.inflate(inflater, container, false)\r\n        val root: View = binding.root\r\n\r\n        val textView: TextView = binding.textDashboard\r\n        dashboardViewModel.text.observe(viewLifecycleOwner) {\r\n            textView.text = it\r\n        }\r\n        return root\r\n    }\r\n\r\n    override fun onDestroyView() {\r\n        super.onDestroyView()\r\n        _binding = null\r\n    }\r\n}
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/app/src/main/java/com/example/cs492finalproject/ui/dashboard/DashboardFragment.kt b/app/src/main/java/com/example/cs492finalproject/ui/dashboard/DashboardFragment.kt
+--- a/app/src/main/java/com/example/cs492finalproject/ui/dashboard/DashboardFragment.kt	(revision 0109b6449fc8dbc0352cac52869915e58d359b8f)
++++ b/app/src/main/java/com/example/cs492finalproject/ui/dashboard/DashboardFragment.kt	(date 1710989131060)
+@@ -1,37 +1,57 @@
+ package com.example.cs492finalproject.ui.dashboard
+ 
+ import android.os.Bundle
++import android.util.Log
+ import android.view.LayoutInflater
+ import android.view.View
+ import android.view.ViewGroup
+ import android.widget.TextView
+ import androidx.fragment.app.Fragment
++import androidx.fragment.app.viewModels
++import androidx.lifecycle.LiveData
++import androidx.lifecycle.MutableLiveData
+ import androidx.lifecycle.ViewModelProvider
++import androidx.navigation.fragment.findNavController
++import androidx.recyclerview.widget.LinearLayoutManager
++import androidx.recyclerview.widget.RecyclerView
++import com.example.cs492finalproject.DrugInfo
++import com.example.cs492finalproject.R
+ import com.example.cs492finalproject.databinding.FragmentDashboardBinding
++import com.example.cs492finalproject.ui.DrugInfoFragmentDirections
++import com.example.cs492finalproject.ui.search.DrugSearchResultsAdapter
+ 
+-class DashboardFragment : Fragment() {
++class DashboardFragment : Fragment(R.layout.fragment_dashboard) {
+ 
++    private lateinit var bookmarkedReposRV: RecyclerView
++    private val adapter = DrugSearchResultsAdapter(::onDrugSearchResultItemClick)
++    private val viewModel: BookmarkedReposViewModel by viewModels()
++
++    private val _text = MutableLiveData<String>()
++    val text: LiveData<String> = _text
+     private var _binding: FragmentDashboardBinding? = null
+-
+-    // This property is only valid between onCreateView and
+-    // onDestroyView.
+     private val binding get() = _binding!!
+ 
++    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
++        super.onViewCreated(view, savedInstanceState)
++
++        bookmarkedReposRV = view.findViewById(R.id.rv_bookmarked_repos)
++        bookmarkedReposRV.layoutManager = LinearLayoutManager(requireContext())
++        bookmarkedReposRV.setHasFixedSize(true)
++        bookmarkedReposRV.adapter = adapter
++
++        viewModel.bookmarkedRepos.observe(viewLifecycleOwner) { bookmarkedRepos ->
++            adapter.updateResultsList(bookmarkedRepos)
++        }
++    }
++
+     override fun onCreateView(
+         inflater: LayoutInflater,
+         container: ViewGroup?,
+         savedInstanceState: Bundle?
+     ): View {
+-        val dashboardViewModel =
+-            ViewModelProvider(this).get(DashboardViewModel::class.java)
+ 
+         _binding = FragmentDashboardBinding.inflate(inflater, container, false)
+         val root: View = binding.root
+-
+-        val textView: TextView = binding.textDashboard
+-        dashboardViewModel.text.observe(viewLifecycleOwner) {
+-            textView.text = it
+-        }
+         return root
+     }
+ 
+@@ -39,4 +59,10 @@
+         super.onDestroyView()
+         _binding = null
+     }
++
++    private fun onDrugSearchResultItemClick(drug: DrugInfo) {
++        Log.d("DrugInfo", "drug clicked" + drug.title)
++        val directions = DrugInfoFragmentDirections.navigateToDrugInfo(drug)
++        findNavController().navigate(directions)
++    }
+ }
+\ No newline at end of file
+Index: app/src/main/java/com/example/cs492finalproject/BookmarkedDrugsRepository.kt
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/app/src/main/java/com/example/cs492finalproject/BookmarkedDrugsRepository.kt b/app/src/main/java/com/example/cs492finalproject/BookmarkedDrugsRepository.kt
+new file mode 100644
+--- /dev/null	(date 1710989131052)
++++ b/app/src/main/java/com/example/cs492finalproject/BookmarkedDrugsRepository.kt	(date 1710989131052)
+@@ -0,0 +1,11 @@
++package com.example.cs492finalproject
++
++import androidx.lifecycle.asLiveData
++
++class BookmarkedDrugsRepository (
++    private val dao: DrugInfoDao
++) {
++    suspend fun insertBookmarkedRepo(drug: DrugInfo) = dao.insert(drug)
++    suspend fun deleteBookmarkedRepo(drug: DrugInfo) = dao.delete(drug)
++    fun getAllBookmarkedRepos() = dao.getAllRepos()
++}
+\ No newline at end of file
+Index: app/src/main/java/com/example/cs492finalproject/ui/dashboard/DashboardViewModel.kt
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>package com.example.cs492finalproject.ui.dashboard\r\n\r\nimport androidx.lifecycle.LiveData\r\nimport androidx.lifecycle.MutableLiveData\r\nimport androidx.lifecycle.ViewModel\r\n\r\nclass DashboardViewModel : ViewModel() {\r\n\r\n    private val _text = MutableLiveData<String>().apply {\r\n        value = \"This is dashboard Fragment\"\r\n    }\r\n    val text: LiveData<String> = _text\r\n}
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/app/src/main/java/com/example/cs492finalproject/ui/dashboard/DashboardViewModel.kt b/app/src/main/java/com/example/cs492finalproject/ui/dashboard/DashboardViewModel.kt
+--- a/app/src/main/java/com/example/cs492finalproject/ui/dashboard/DashboardViewModel.kt	(revision 0109b6449fc8dbc0352cac52869915e58d359b8f)
++++ b/app/src/main/java/com/example/cs492finalproject/ui/dashboard/DashboardViewModel.kt	(date 1710989131061)
+@@ -1,13 +1,33 @@
+ package com.example.cs492finalproject.ui.dashboard
+ 
++import android.app.Application
++import androidx.lifecycle.AndroidViewModel
+ import androidx.lifecycle.LiveData
+ import androidx.lifecycle.MutableLiveData
+ import androidx.lifecycle.ViewModel
++import androidx.lifecycle.asLiveData
++import androidx.lifecycle.viewModelScope
++import com.example.cs492finalproject.AppDatabase
++import com.example.cs492finalproject.BookmarkedDrugsRepository
++import com.example.cs492finalproject.DrugInfo
++import kotlinx.coroutines.launch
++
++class BookmarkedReposViewModel(application: Application) : AndroidViewModel(application) {
++    private val repository = BookmarkedDrugsRepository(
++        AppDatabase.getInstance(application).drugInfoDao()
++    )
+ 
+-class DashboardViewModel : ViewModel() {
++    val bookmarkedRepos = repository.getAllBookmarkedRepos().asLiveData()
+ 
+-    private val _text = MutableLiveData<String>().apply {
+-        value = "This is dashboard Fragment"
++    fun addBookmarkedRepo(drug: DrugInfo) {
++        viewModelScope.launch {
++            repository.insertBookmarkedRepo(drug)
++        }
+     }
+-    val text: LiveData<String> = _text
++
++    fun removeBookmarkedRepo(drug: DrugInfo) {
++        viewModelScope.launch {
++            repository.deleteBookmarkedRepo(drug)
++        }
++    }
+ }
+\ No newline at end of file
+Index: app/src/main/res/menu/drug_info_menu.xml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/app/src/main/res/menu/drug_info_menu.xml b/app/src/main/res/menu/drug_info_menu.xml
+new file mode 100644
+--- /dev/null	(date 1710989131072)
++++ b/app/src/main/res/menu/drug_info_menu.xml	(date 1710989131072)
+@@ -0,0 +1,4 @@
++<?xml version="1.0" encoding="utf-8"?>
++<menu xmlns:android="http://schemas.android.com/apk/res/android">
++
++</menu>
+\ No newline at end of file
+Index: app/src/main/java/com/example/cs492finalproject/DrugInfoDao.kt
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/app/src/main/java/com/example/cs492finalproject/DrugInfoDao.kt b/app/src/main/java/com/example/cs492finalproject/DrugInfoDao.kt
+new file mode 100644
+--- /dev/null	(date 1710989131056)
++++ b/app/src/main/java/com/example/cs492finalproject/DrugInfoDao.kt	(date 1710989131056)
+@@ -0,0 +1,24 @@
++package com.example.cs492finalproject
++
++import androidx.room.Dao
++import androidx.room.Delete
++import androidx.room.Insert
++import androidx.room.Query
++import kotlinx.coroutines.flow.Flow
++
++
++@Dao
++interface DrugInfoDao {
++    @Insert
++    suspend fun insert(drug: DrugInfo)
++
++    @Delete
++    suspend fun delete(drug: DrugInfo)
++
++    @Query("SELECT * FROM DrugInfo")
++    fun getAllRepos() : Flow<List<DrugInfo>>
++
++    @Query("SELECT * FROM DrugInfo WHERE title = :name LIMIT 1")
++    fun getRepoByName(name: String) : Flow<DrugInfo?>
++
++}
+\ No newline at end of file
